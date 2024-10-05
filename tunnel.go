@@ -112,6 +112,10 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 				case <-ctx.Done():
 					return
 				default:
+					if strings.Contains(err.Error(), "use of closed network connection") {
+						// Listener was closed, we should exit
+						return
+					}
 					log.Error().Err(err).Str("tunnel", tunnel.Name).Msg("Failed to accept connection")
 					continue
 				}
@@ -186,6 +190,6 @@ func closeTunnels() {
 	for name, listener := range activeTunnels {
 		listener.Close()
 		delete(activeTunnels, name)
-		log.Info().Str("name", name).Msg("Tunnel disabled")
+		log.Info().Str("name", name).Msg("tunnel disabled")
 	}
 }

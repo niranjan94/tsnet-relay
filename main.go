@@ -84,6 +84,7 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
 
+	log.Info().Int("pid", os.Getpid()).Msg("send SIGUSR1 to reload configuration")
 	// Handle signals
 	for {
 		sig := <-sigs
