@@ -1,0 +1,4 @@
+*.json
+tsnet-relay
+build/
+dist/
