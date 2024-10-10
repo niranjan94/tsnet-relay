@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"os"
 	"sync"
 )
@@ -19,22 +20,36 @@ var (
 
 // loadConfig reads and parses the configuration file
 func loadConfig() error {
-	file, err := os.Open(configPath)
-	if err != nil {
-		return err
+	rawConfigFromEnv := os.Getenv("TSNET_RELAY_CONFIG")
+	if rawConfigFromEnv != "" {
+		log.Printf("loading config from environment variable `TSNET_RELAY_CONFIG`")
+		configMutex.Lock()
+		defer configMutex.Unlock()
+		err := json.Unmarshal([]byte(rawConfigFromEnv), &config)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Printf("loading config from file `%s`", configPath)
+		file, err := os.Open(configPath)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		decoder := json.NewDecoder(file)
+		configMutex.Lock()
+		defer configMutex.Unlock()
+		if err := decoder.Decode(&config); err != nil {
+			return err
+		}
 	}
-	defer file.Close()
 
-	decoder := json.NewDecoder(file)
-	configMutex.Lock()
-	defer configMutex.Unlock()
-	err = decoder.Decode(&config)
 	// resolve env vars on tunnel
 	for _, tunnel := range config.Tunnels {
 		tunnel.Source = os.ExpandEnv(tunnel.Source)
 		tunnel.Destination = os.ExpandEnv(tunnel.Destination)
 	}
-	return err
+	return nil
 }
 
 // reloadConfig reloads the configuration and updates the tunnels
