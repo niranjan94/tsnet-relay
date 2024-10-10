@@ -28,7 +28,13 @@ func loadConfig() error {
 	decoder := json.NewDecoder(file)
 	configMutex.Lock()
 	defer configMutex.Unlock()
-	return decoder.Decode(&config)
+	err = decoder.Decode(&config)
+	// resolve env vars on tunnel
+	for _, tunnel := range config.Tunnels {
+		tunnel.Source = os.ExpandEnv(tunnel.Source)
+		tunnel.Destination = os.ExpandEnv(tunnel.Destination)
+	}
+	return err
 }
 
 // reloadConfig reloads the configuration and updates the tunnels
