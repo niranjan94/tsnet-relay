@@ -17,12 +17,13 @@ import (
 var (
 	srv *Server
 
-	hostname       string
-	tags           string
-	ephemeral      bool
-	stateStoreName string
-	configPath     string
-	verbose        bool
+	hostname           string
+	tags               string
+	ephemeral          bool
+	stateStoreName     string
+	configPath         string
+	verbose            bool
+	idleTimeoutSeconds int
 )
 
 func main() {
@@ -33,6 +34,7 @@ func main() {
 	flag.StringVar(&stateStoreName, "state", "mem:", "State store to use for the server")
 	flag.StringVar(&configPath, "config", "config.json", "Path to the configuration file")
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
+	flag.IntVar(&idleTimeoutSeconds, "idle-timeout", 0, "Exit after specified number of seconds with no incoming connections (0 to disable)")
 	flag.Parse()
 
 	if hostname == "" {
@@ -79,6 +81,9 @@ func main() {
 	if err := setupTunnels(ctx); err != nil {
 		log.Fatal().Err(err).Msg("Failed to set up initial tunnels")
 	}
+
+	// Start the idle timeout checker
+	startIdleTimeoutChecker(ctx, time.Duration(idleTimeoutSeconds)*time.Second)
 
 	// Set up signal handling
 	sigs := make(chan os.Signal, 1)

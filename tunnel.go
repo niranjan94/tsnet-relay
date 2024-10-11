@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -27,10 +28,54 @@ const (
 var (
 	activeTunnels      = make(map[string]net.Listener)
 	activeTunnelsMutex sync.Mutex
+	lastConnectionTime time.Time
+	connectionMutex    sync.Mutex
 )
+
+// updateLastConnectionTime updates the time of the last incoming connection
+func updateLastConnectionTime() {
+	connectionMutex.Lock()
+	lastConnectionTime = time.Now()
+	connectionMutex.Unlock()
+}
+
+// startIdleTimeoutChecker starts a goroutine to check for idle timeout
+func startIdleTimeoutChecker(ctx context.Context, timeout time.Duration) {
+	if timeout == 0 {
+		return // Idle timeout is disabled
+	}
+
+	log.Info().Msgf("idle timeout is set to %v seconds", timeout.Seconds())
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				connectionMutex.Lock()
+				idleTime := time.Since(lastConnectionTime)
+				connectionMutex.Unlock()
+
+				if idleTime > timeout {
+					log.Info().Msgf("No incoming connections for %v seconds. Exiting.", timeout.Seconds())
+					if srv != nil {
+						srv.Shutdown()
+					}
+					os.Exit(0)
+				}
+			}
+		}
+	}()
+}
 
 // setupTunnels initializes all enabled tunnels
 func setupTunnels(ctx context.Context) error {
+	// Initialize lastConnectionTime
+	updateLastConnectionTime()
+
 	configMutex.RLock()
 	defer configMutex.RUnlock()
 	for _, tunnel := range config.Tunnels {
@@ -130,6 +175,8 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 
 // handleConnection manages a single connection through the tunnel
 func handleConnection(ctx context.Context, clientConn net.Conn, destProto, destAddr string) {
+	updateLastConnectionTime()
+
 	defer clientConn.Close()
 
 	log.Info().Str("client", clientConn.RemoteAddr().String()).Str("destination", destAddr).Msg("New connection")
