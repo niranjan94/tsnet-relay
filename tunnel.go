@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -28,15 +29,22 @@ const (
 var (
 	activeTunnels      = make(map[string]net.Listener)
 	activeTunnelsMutex sync.Mutex
-	lastConnectionTime time.Time
-	connectionMutex    sync.Mutex
+	activeConnections  int64
 )
 
-// updateLastConnectionTime updates the time of the last incoming connection
-func updateLastConnectionTime() {
-	connectionMutex.Lock()
-	lastConnectionTime = time.Now()
-	connectionMutex.Unlock()
+// incrementActiveConnections increments the active connection counter
+func incrementActiveConnections() {
+	atomic.AddInt64(&activeConnections, 1)
+}
+
+// decrementActiveConnections decrements the active connection counter
+func decrementActiveConnections() {
+	atomic.AddInt64(&activeConnections, -1)
+}
+
+// getActiveConnections returns the current number of active connections
+func getActiveConnections() int64 {
+	return atomic.LoadInt64(&activeConnections)
 }
 
 // startIdleTimeoutChecker starts a goroutine to check for idle timeout
@@ -49,22 +57,25 @@ func startIdleTimeoutChecker(ctx context.Context, timeout time.Duration) {
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
+		lastActiveTime := time.Now()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				connectionMutex.Lock()
-				idleTime := time.Since(lastConnectionTime)
-				connectionMutex.Unlock()
-
-				if idleTime > timeout {
-					log.Info().Msgf("No incoming connections for %v seconds. Exiting.", timeout.Seconds())
-					if srv != nil {
-						srv.Shutdown()
+				currentActive := getActiveConnections()
+				if currentActive > 0 {
+					lastActiveTime = time.Now()
+				} else {
+					idleTime := time.Since(lastActiveTime)
+					if idleTime > timeout {
+						log.Info().Msgf("No active connections for %v seconds. Exiting.", timeout.Seconds())
+						if srv != nil {
+							srv.Shutdown()
+						}
+						os.Exit(0)
 					}
-					os.Exit(0)
 				}
 			}
 		}
@@ -73,9 +84,6 @@ func startIdleTimeoutChecker(ctx context.Context, timeout time.Duration) {
 
 // setupTunnels initializes all enabled tunnels
 func setupTunnels(ctx context.Context) error {
-	// Initialize lastConnectionTime
-	updateLastConnectionTime()
-
 	configMutex.RLock()
 	defer configMutex.RUnlock()
 	for _, tunnel := range config.Tunnels {
@@ -175,7 +183,8 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 
 // handleConnection manages a single connection through the tunnel
 func handleConnection(ctx context.Context, clientConn net.Conn, destProto, destAddr string) {
-	updateLastConnectionTime()
+	incrementActiveConnections()
+	defer decrementActiveConnections()
 
 	defer clientConn.Close()
 
