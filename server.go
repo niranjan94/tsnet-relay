@@ -17,16 +17,14 @@ type Server struct {
 }
 
 // NewServer creates a new Server instance
-func NewServer(hostname string, ephemeral bool, stateStore ipn.StateStore, authKey string, verbose bool) *Server {
+func NewServer(hostname string, ephemeral bool, stateStore ipn.StateStore, authKey string) *Server {
 	srv := &tsnet.Server{
 		Hostname:  hostname,
 		Ephemeral: ephemeral,
 		Store:     stateStore,
 		AuthKey:   authKey,
 		Logf: func(format string, args ...any) {
-			if verbose {
-				log.Debug().Str("module", "tailscale").Msgf(format, args...)
-			}
+			log.Debug().Str("module", "tailscale").Msgf(format, args...)
 		},
 		UserLogf: func(format string, args ...any) {
 			log.Info().Str("module", "tailscale").Msgf(format, args...)

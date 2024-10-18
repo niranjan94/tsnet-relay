@@ -188,7 +188,7 @@ func handleConnection(ctx context.Context, clientConn net.Conn, destProto, destA
 
 	defer clientConn.Close()
 
-	log.Info().Str("client", clientConn.RemoteAddr().String()).Str("destination", destAddr).Msg("New connection")
+	log.Debug().Str("client", clientConn.RemoteAddr().String()).Str("destination", destAddr).Msg("New connection")
 
 	var remoteConn net.Conn
 	var err error
@@ -226,7 +226,7 @@ func handleConnection(ctx context.Context, clientConn net.Conn, destProto, destA
 		log.Info().Msg("Connection closed due to shutdown")
 	}
 
-	log.Info().Str("client", clientConn.RemoteAddr().String()).Msg("Connection closed")
+	log.Debug().Str("client", clientConn.RemoteAddr().String()).Msg("Connection closed")
 }
 
 // parseAddress splits an address into protocol and address parts

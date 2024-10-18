@@ -37,6 +37,12 @@ func main() {
 	flag.IntVar(&idleTimeoutSeconds, "idle-timeout", 0, "Exit after specified number of seconds with no incoming connections (0 to disable)")
 	flag.Parse()
 
+	// Default level for this example is info, unless debug flag is present
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if verbose {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
+
 	if hostname == "" {
 		log.Fatal().Msg("Hostname is required")
 	}
@@ -63,7 +69,7 @@ func main() {
 	}
 
 	// Start the server
-	srv = NewServer(hostname, ephemeral, stateStore, authKey, verbose)
+	srv = NewServer(hostname, ephemeral, stateStore, authKey)
 	if err := srv.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start server")
 	}
