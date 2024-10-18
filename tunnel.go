@@ -29,6 +29,7 @@ const (
 var (
 	activeTunnels      = make(map[string]net.Listener)
 	activeTunnelsMutex sync.Mutex
+	setupTunnelsCancel context.CancelFunc
 	activeConnections  int64
 )
 
@@ -86,18 +87,31 @@ func startIdleTimeoutChecker(ctx context.Context, timeout time.Duration) {
 func setupTunnels(ctx context.Context) error {
 	configMutex.RLock()
 	defer configMutex.RUnlock()
+
+	if setupTunnelsCancel != nil {
+		setupTunnelsCancel()
+	}
+
+	retryContext, cancel := context.WithCancel(ctx)
+	setupTunnelsCancel = cancel
+
 	for _, tunnel := range config.Tunnels {
 		if tunnel.Enabled {
 			log.Info().Str("name", tunnel.Name).Str("source", tunnel.Source).Str("destination", tunnel.Destination).Msg("enabling tunnel")
-			go manageTunnel(ctx, tunnel)
+			go manageTunnel(ctx, retryContext, tunnel)
 		}
 	}
 	return nil
 }
 
 // manageTunnel handles the lifecycle of a single tunnel
-func manageTunnel(ctx context.Context, tunnel Tunnel) {
+func manageTunnel(ctx context.Context, retryCtx context.Context, tunnel Tunnel) {
 	for {
+		// Check if we should exit early
+		if ctx.Err() != nil || retryCtx.Err() != nil {
+			return
+		}
+
 		err := setupTunnel(ctx, tunnel)
 		if err == nil {
 			// Tunnel is set up successfully, our job here is done
@@ -107,6 +121,8 @@ func manageTunnel(ctx context.Context, tunnel Tunnel) {
 		log.Error().Err(err).Str("tunnel", tunnel.Name).Msg("Failed to set up tunnel, will retry")
 
 		select {
+		case <-retryCtx.Done():
+			return
 		case <-ctx.Done():
 			return
 		case <-time.After(checkInterval):
