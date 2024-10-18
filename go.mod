@@ -2,7 +2,11 @@ module github.com/niranjan94/tsnet-relay
 
 go 1.23.1
 
-require github.com/rs/zerolog v1.33.0
+require (
+	github.com/rs/zerolog v1.33.0
+	golang.org/x/oauth2 v0.23.0
+	tailscale.com v1.76.1
+)
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -77,7 +81,6 @@ require (
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a // indirect
 	golang.org/x/mod v0.19.0 // indirect
 	golang.org/x/net v0.27.0 // indirect
-	golang.org/x/oauth2 v0.23.0
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/term v0.22.0 // indirect
@@ -87,5 +90,4 @@ require (
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	gvisor.dev/gvisor v0.0.0-20240722211153-64c016c92987 // indirect
-	tailscale.com v1.74.1
 )
