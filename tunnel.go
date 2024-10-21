@@ -23,7 +23,7 @@ type Tunnel struct {
 }
 
 const (
-	checkInterval = 30 * time.Second
+	checkInterval = 5 * time.Second
 )
 
 var (
@@ -143,16 +143,25 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 		return err
 	}
 
+	var conn net.Conn
+
 	// Check if the destination is a Tailscale service
 	if strings.HasPrefix(destProto, "tcp+tailnet") {
 		// Try to connect to the destination
-		conn, err := srv.Dial(ctx, "tcp", destAddr)
+		conn, err = srv.Dial(ctx, "tcp", destAddr)
 		if err != nil {
 			return fmt.Errorf("destination %s is not accessible: %v", tunnel.Destination, err)
 		}
-		conn.Close() // Close the connection immediately after successful dial
-		log.Info().Str("destination", tunnel.Destination).Msg("Tailscale destination is accessible")
+	} else {
+		// Try to connect to the destination
+		conn, err = net.Dial(destProto, destAddr)
+		if err != nil {
+			return fmt.Errorf("destination %s is not accessible: %v", tunnel.Destination, err)
+		}
 	}
+
+	conn.Close() // Close the connection immediately after successful dial
+	log.Info().Str("destination", tunnel.Destination).Msg("Destination is accessible")
 
 	var listener net.Listener
 	if strings.HasPrefix(sourceProto, "tcp+tailnet") {
@@ -173,7 +182,6 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 
 	go func() {
 		defer listener.Close()
-
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -189,7 +197,6 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 					continue
 				}
 			}
-
 			go handleConnection(ctx, conn, destProto, destAddr)
 		}
 	}()
@@ -260,6 +267,18 @@ func closeTunnels() {
 	defer activeTunnelsMutex.Unlock()
 
 	for name, listener := range activeTunnels {
+		listener.Close()
+		delete(activeTunnels, name)
+		log.Info().Str("name", name).Msg("tunnel disabled")
+	}
+}
+
+// stopTunnel disables a single tunnel
+func stopTunnel(name string) {
+	activeTunnelsMutex.Lock()
+	defer activeTunnelsMutex.Unlock()
+
+	if listener, exists := activeTunnels[name]; exists {
 		listener.Close()
 		delete(activeTunnels, name)
 		log.Info().Str("name", name).Msg("tunnel disabled")

@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"os"
+	"reflect"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Config represents the application configuration
@@ -54,9 +56,60 @@ func loadConfig() error {
 
 // reloadConfig reloads the configuration and updates the tunnels
 func reloadConfig(ctx context.Context) error {
+	log.Info().Msg("reloading configuration")
+
+	oldTunnels := make([]Tunnel, len(config.Tunnels))
+	copy(oldTunnels, config.Tunnels)
+
 	if err := loadConfig(); err != nil {
 		return err
 	}
-	closeTunnels()
-	return setupTunnels(ctx)
+
+	// Compare old and new configurations
+	tunnelsToStop, tunnelsToStart := compareTunnelConfigs(oldTunnels, config.Tunnels)
+
+	// Stop changed tunnels
+	for _, tunnel := range tunnelsToStop {
+		log.Info().Str("name", tunnel.Name).Msg("stopping tunnel")
+		stopTunnel(tunnel.Name)
+	}
+
+	// Start new or changed tunnels
+	for _, tunnel := range tunnelsToStart {
+		log.Info().Str("name", tunnel.Name).Msg("starting tunnel")
+		go manageTunnel(ctx, ctx, tunnel)
+	}
+	return nil
+}
+
+// compareTunnelConfigs compares old and new tunnel configurations
+func compareTunnelConfigs(oldTunnels, newTunnels []Tunnel) ([]Tunnel, []Tunnel) {
+	var tunnelsToStop, tunnelsToStart []Tunnel
+	oldMap := make(map[string]Tunnel)
+	newMap := make(map[string]Tunnel)
+
+	for _, t := range oldTunnels {
+		oldMap[t.Name] = t
+	}
+	for _, t := range newTunnels {
+		newMap[t.Name] = t
+	}
+
+	log.Info().Interface("old", oldMap).Interface("new", newMap).Msg("comparing tunnel configurations")
+	for name, oldTunnel := range oldMap {
+		newTunnel, exists := newMap[name]
+		if !exists || !reflect.DeepEqual(oldTunnel, newTunnel) {
+			tunnelsToStop = append(tunnelsToStop, oldTunnel)
+		}
+	}
+
+	for name, newTunnel := range newMap {
+		oldTunnel, exists := oldMap[name]
+		if !exists || !reflect.DeepEqual(oldTunnel, newTunnel) {
+			tunnelsToStart = append(tunnelsToStart, newTunnel)
+		}
+	}
+
+	log.Info().Interface("tunnelsToStop", tunnelsToStop).Interface("tunnelsToStart", tunnelsToStart).Msg("tunnels to stop and start")
+	return tunnelsToStop, tunnelsToStart
 }
