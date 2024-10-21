@@ -39,12 +39,12 @@ func NewServer(hostname string, ephemeral bool, stateStore ipn.StateStore, authK
 // Start initializes and starts the tsnet server
 func (s *Server) Start() error {
 	log.Info().Msg("starting tunnel")
-
-	err := s.srv.Start()
+	status, err := s.srv.Up(context.Background())
 	if err != nil {
 		return err
 	}
 
+	log.Info().Str("BackendState", status.BackendState).Msgf("tunnel started")
 	s.localClient, err = s.srv.LocalClient()
 	if err != nil {
 		return err
