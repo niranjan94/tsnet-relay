@@ -19,6 +19,7 @@ type Tunnel struct {
 	Name        string `json:"name"`
 	Enabled     bool   `json:"enabled"`
 	Source      string `json:"source"`
+	Primary     bool   `json:"primary"`
 	Destination string `json:"destination"`
 }
 
@@ -179,7 +180,6 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 	activeTunnelsMutex.Unlock()
 
 	log.Info().Str("name", tunnel.Name).Str("source", tunnel.Source).Str("destination", tunnel.Destination).Msg("Tunnel enabled")
-
 	go func() {
 		defer listener.Close()
 		for {
@@ -197,7 +197,7 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 					continue
 				}
 			}
-			go handleConnection(ctx, conn, destProto, destAddr)
+			go handleConnection(ctx, conn, destProto, destAddr, tunnel.Primary)
 		}
 	}()
 
@@ -205,9 +205,12 @@ func setupTunnel(ctx context.Context, tunnel Tunnel) error {
 }
 
 // handleConnection manages a single connection through the tunnel
-func handleConnection(ctx context.Context, clientConn net.Conn, destProto, destAddr string) {
-	incrementActiveConnections()
-	defer decrementActiveConnections()
+func handleConnection(ctx context.Context, clientConn net.Conn, destProto, destAddr string, primary bool) {
+	// Only increment active connections if this is a primary connection
+	if primary {
+		incrementActiveConnections()
+		defer decrementActiveConnections()
+	}
 
 	defer clientConn.Close()
 
