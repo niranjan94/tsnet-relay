@@ -32,9 +32,6 @@ WORKDIR /home/app
 # Copy the pre-built binary file from the previous stage
 COPY --from=builder /app/tsnet-relay .
 
-# Copy the config file
-COPY config.json .
-
 # Chown all the files to the app user
 RUN chown -R app:app /home/app
 
