@@ -1,3 +1,5 @@
+[![DeepSource](https://app.deepsource.com/gh/niranjan94/tsnet-relay.svg/?label=active+issues&show_trend=true&token=Do84hQ3_bWTShmuaJu5RikAE)](https://app.deepsource.com/gh/niranjan94/tsnet-relay/)
+
 ## Tailscale Relay
 
 > Work in progress. Expect breaking changes.
