@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 )
@@ -15,34 +14,26 @@ type Config struct {
 	Tunnels []Tunnel `json:"tunnels"`
 }
 
-var (
-	config      Config
-	configMutex sync.RWMutex
-)
-
 // LoadConfig reads and parses the configuration file
-func LoadConfig(configPath string) error {
+func LoadConfig(configPath string) (*Config, error) {
+	var config Config
 	rawConfigFromEnv := os.Getenv("TSNET_RELAY_CONFIG")
 	if rawConfigFromEnv != "" {
 		log.Printf("loading config from environment variable `TSNET_RELAY_CONFIG`")
-		configMutex.Lock()
-		defer configMutex.Unlock()
 		err := json.Unmarshal([]byte(rawConfigFromEnv), &config)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		log.Printf("loading config from file `%s`", configPath)
 		file, err := os.Open(configPath)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		defer file.Close()
 		decoder := json.NewDecoder(file)
-		configMutex.Lock()
-		defer configMutex.Unlock()
 		if err := decoder.Decode(&config); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -51,27 +42,31 @@ func LoadConfig(configPath string) error {
 		tunnel.Source = os.ExpandEnv(tunnel.Source)
 		tunnel.Destination = os.ExpandEnv(tunnel.Destination)
 	}
-	return nil
+
+	return &config, nil
 }
 
 // ReloadConfig reloads the configuration and updates the tunnels
-func ReloadConfig(ctx context.Context, configPath string, srv *Server) error {
+func ReloadConfig(ctx context.Context, configPath string, srv *Server, oldConfig *Config) (*Config, error) {
 	log.Info().Msg("reloading configuration")
-
-	oldTunnels := make([]Tunnel, len(config.Tunnels))
-	copy(oldTunnels, config.Tunnels)
-
-	if err := LoadConfig(configPath); err != nil {
-		return err
+	newConfig, err := LoadConfig(configPath)
+	if err != nil {
+		return nil, err
 	}
 
-	// Compare old and new configurations
-	tunnelsToStop, tunnelsToStart := compareTunnelConfigs(oldTunnels, config.Tunnels)
+	tunnelsToStart := make([]Tunnel, 0)
+	tunnelsToStop := make([]Tunnel, 0)
 
-	// Stop changed tunnels
-	for _, tunnel := range tunnelsToStop {
-		log.Info().Str("name", tunnel.Name).Msg("stopping tunnel")
-		srv.StopTunnel(tunnel.Name)
+	// If old configuration exists and has tunnels defined, compare and stop tunnels if necessary
+	if oldConfig != nil && len(oldConfig.Tunnels) > 0 {
+		// Compare old and new configurations
+		tunnelsToStop, tunnelsToStart = compareTunnelConfigs(oldConfig.Tunnels, newConfig.Tunnels)
+
+		// Stop changed tunnels
+		for _, tunnel := range tunnelsToStop {
+			log.Info().Str("name", tunnel.Name).Msg("stopping tunnel")
+			srv.StopTunnel(tunnel.Name)
+		}
 	}
 
 	// Start new or changed tunnels
@@ -79,7 +74,7 @@ func ReloadConfig(ctx context.Context, configPath string, srv *Server) error {
 		log.Info().Str("name", tunnel.Name).Msg("starting tunnel")
 		go srv.manageTunnel(ctx, ctx, tunnel)
 	}
-	return nil
+	return newConfig, nil
 }
 
 // compareTunnelConfigs compares old and new tunnel configurations

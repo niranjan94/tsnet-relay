@@ -76,7 +76,8 @@ func main() {
 	}
 
 	// Load initial configuration
-	if err := tsnet_relay.LoadConfig(configPath); err != nil {
+	config, err := tsnet_relay.LoadConfig(configPath)
+	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 
@@ -85,7 +86,7 @@ func main() {
 	defer cancel()
 
 	// Set up initial tunnels
-	if err := srv.SetupTunnels(ctx); err != nil {
+	if err := srv.SetupTunnels(ctx, config.Tunnels); err != nil {
 		log.Fatal().Err(err).Msg("Failed to set up initial tunnels")
 	}
 
@@ -103,7 +104,7 @@ func main() {
 		switch sig {
 		case syscall.SIGUSR1:
 			log.Info().Msg("Received SIGUSR1. Reloading configuration.")
-			if err := tsnet_relay.ReloadConfig(ctx, configPath, srv); err != nil {
+			if _, err := tsnet_relay.ReloadConfig(ctx, configPath, srv, config); err != nil {
 				log.Error().Err(err).Msg("Failed to reload configuration")
 			}
 		case syscall.SIGINT, syscall.SIGTERM:

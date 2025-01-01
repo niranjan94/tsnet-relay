@@ -106,10 +106,7 @@ func (s *Server) getActiveConnections() int64 {
 }
 
 // SetupTunnels initializes all enabled tunnels
-func (s *Server) SetupTunnels(ctx context.Context) error {
-	configMutex.RLock()
-	defer configMutex.RUnlock()
-
+func (s *Server) SetupTunnels(ctx context.Context, tunnels []Tunnel) error {
 	if s.setupTunnelsCancel != nil {
 		s.setupTunnelsCancel()
 	}
@@ -117,7 +114,7 @@ func (s *Server) SetupTunnels(ctx context.Context) error {
 	retryContext, cancel := context.WithCancel(ctx)
 	s.setupTunnelsCancel = cancel
 
-	for _, tunnel := range config.Tunnels {
+	for _, tunnel := range tunnels {
 		if tunnel.Enabled {
 			log.Info().Str("name", tunnel.Name).Str("source", tunnel.Source).Str("destination", tunnel.Destination).Msg("enabling tunnel")
 			go s.manageTunnel(ctx, retryContext, tunnel)
