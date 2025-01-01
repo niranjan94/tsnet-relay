@@ -1,4 +1,4 @@
-package main
+package tsnet_relay
 
 import (
 	"context"
@@ -20,8 +20,8 @@ var (
 	configMutex sync.RWMutex
 )
 
-// loadConfig reads and parses the configuration file
-func loadConfig() error {
+// LoadConfig reads and parses the configuration file
+func LoadConfig(configPath string) error {
 	rawConfigFromEnv := os.Getenv("TSNET_RELAY_CONFIG")
 	if rawConfigFromEnv != "" {
 		log.Printf("loading config from environment variable `TSNET_RELAY_CONFIG`")
@@ -54,14 +54,14 @@ func loadConfig() error {
 	return nil
 }
 
-// reloadConfig reloads the configuration and updates the tunnels
-func reloadConfig(ctx context.Context) error {
+// ReloadConfig reloads the configuration and updates the tunnels
+func ReloadConfig(ctx context.Context, configPath string, srv *Server) error {
 	log.Info().Msg("reloading configuration")
 
 	oldTunnels := make([]Tunnel, len(config.Tunnels))
 	copy(oldTunnels, config.Tunnels)
 
-	if err := loadConfig(); err != nil {
+	if err := LoadConfig(configPath); err != nil {
 		return err
 	}
 
@@ -71,13 +71,13 @@ func reloadConfig(ctx context.Context) error {
 	// Stop changed tunnels
 	for _, tunnel := range tunnelsToStop {
 		log.Info().Str("name", tunnel.Name).Msg("stopping tunnel")
-		stopTunnel(tunnel.Name)
+		srv.StopTunnel(tunnel.Name)
 	}
 
 	// Start new or changed tunnels
 	for _, tunnel := range tunnelsToStart {
 		log.Info().Str("name", tunnel.Name).Msg("starting tunnel")
-		go manageTunnel(ctx, ctx, tunnel)
+		go srv.manageTunnel(ctx, ctx, tunnel)
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/niranjan94/tsnet-relay"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"tailscale.com/ipn/store/mem"
@@ -15,7 +16,7 @@ import (
 
 // Global variables
 var (
-	srv *Server
+	srv *tsnet_relay.Server
 
 	hostname           string
 	tags               string
@@ -63,19 +64,19 @@ func main() {
 	// Resolve auth key
 	log.Info().Msg("resolving auth key")
 	authKeyFromEnv := os.Getenv("TS_AUTHKEY")
-	authKey, err := resolveAuthKey(context.Background(), authKeyFromEnv, tags)
+	authKey, err := tsnet_relay.ResolveAuthKey(context.Background(), authKeyFromEnv, tags)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to resolve auth key")
 	}
 
 	// Start the server
-	srv = NewServer(hostname, ephemeral, stateStore, authKey)
+	srv = tsnet_relay.NewServer(hostname, ephemeral, stateStore, authKey)
 	if err := srv.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start server")
 	}
 
 	// Load initial configuration
-	if err := loadConfig(); err != nil {
+	if err := tsnet_relay.LoadConfig(configPath); err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 
@@ -84,12 +85,12 @@ func main() {
 	defer cancel()
 
 	// Set up initial tunnels
-	if err := setupTunnels(ctx); err != nil {
+	if err := srv.SetupTunnels(ctx); err != nil {
 		log.Fatal().Err(err).Msg("Failed to set up initial tunnels")
 	}
 
 	// Start the idle timeout checker
-	startIdleTimeoutChecker(ctx, time.Duration(idleTimeoutSeconds)*time.Second)
+	srv.StartIdleTimeoutChecker(ctx, time.Duration(idleTimeoutSeconds)*time.Second)
 
 	// Set up signal handling
 	sigs := make(chan os.Signal, 1)
@@ -102,7 +103,7 @@ func main() {
 		switch sig {
 		case syscall.SIGUSR1:
 			log.Info().Msg("Received SIGUSR1. Reloading configuration.")
-			if err := reloadConfig(ctx); err != nil {
+			if err := tsnet_relay.ReloadConfig(ctx, configPath, srv); err != nil {
 				log.Error().Err(err).Msg("Failed to reload configuration")
 			}
 		case syscall.SIGINT, syscall.SIGTERM:

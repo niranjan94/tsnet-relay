@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -v -a -o tsnet-relay .
+RUN CGO_ENABLED=0 GOOS=linux go build -v -a -o tsnet-relay cmd/tsnet-relay.go
 
 # Start a new stage from scratch
 FROM alpine:latest
