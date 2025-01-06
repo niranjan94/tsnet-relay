@@ -69,9 +69,13 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to resolve auth key")
 	}
 
+	// Create a context that we can cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Start the server
 	srv = tsnet_relay.NewServer(hostname, ephemeral, stateStore, authKey)
-	if err := srv.Start(); err != nil {
+	if err := srv.Start(ctx); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start server")
 	}
 
@@ -80,10 +84,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
-
-	// Create a context that we can cancel
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// Set up initial tunnels
 	if err := srv.SetupTunnels(ctx, config.Tunnels); err != nil {
